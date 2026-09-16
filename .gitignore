@@ -1,0 +1,26 @@
+# macOS
+.DS_Store
+
+# Xcode user-specific
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Build
+DerivedData/
+build/
+
+# Swift / SwiftPM
+.build/
+.swiftpm/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+Secrets.xcconfig
+
+# Temporary
+*.tmp
+*.log
