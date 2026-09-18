@@ -1,0 +1,70 @@
+Device orientation: Unknown
+------------------------
+Application bundle identifier: io.github.refereelink-team.RefereeLink
+Application UI orientation: Portrait
+Application, pid: 13376, label: 'RefereeLink'
+ Window, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+  Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+   Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+    Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+     Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+      Other, {{0.0, 0.0}, {402.0, 778.0}}, identifier: 'camera.preview', label: 'Camera preview', hitPoint: {201.0, 389.0}
+      ScrollView, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+       Other, {{0.0, -167.0}, {402.0, 1007.0}}, hitPoint: {201.0, 420.0}
+        Other, {{16.0, -151.0}, {370.0, 232.0}}, identifier: 'gimbal.connectionStatus', hitPoint: {201.0, 40.5}
+         StaticText, {{32.0, -16.0}, {338.0, 20.3}}, label: '固件, mock-1.0', hitPoint: {201.0, 2.2}
+         StaticText, {{32.0, -16.0}, {34.0, 20.3}}, label: '固件', hitPoint: {49.0, 2.2}
+         StaticText, {{32.0, 14.3}, {338.0, 20.3}}, identifier: 'gimbal.motionStreamStatus', label: 'DockKit运动流, 采集中', hitPoint: {201.0, 24.5}
+         StaticText, {{32.0, 14.3}, {110.3, 20.3}}, label: 'DockKit运动流', hitPoint: {87.2, 24.5}
+         StaticText, {{32.0, 44.7}, {338.0, 20.3}}, identifier: 'gimbal.motionSampleCount', label: 'DockKit样本数, 380', hitPoint: {201.0, 54.8}
+         StaticText, {{32.0, 44.7}, {110.3, 20.3}}, label: 'DockKit样本数', hitPoint: {87.2, 54.8}
+        Other, {{16.0, 93.0}, {370.0, 415.7}}, identifier: 'camera.metrics', hitPoint: {201.0, 300.8}
+         StaticText, {{33.3, 109.0}, {94.3, 20.3}}, label: '相机姿态', hitPoint: {80.5, 119.2}
+         Image, {{33.3, 110.7}, {17.3, 17.3}}, identifier: 'rotate.3d', label: 'Three-Dimensional Rotation Arrows', hitPoint: {42.0, 119.3}
+         StaticText, {{32.0, 139.3}, {338.0, 20.3}}, label: '数据源, iPhone Core Motion', hitPoint: {201.0, 149.5}
+         StaticText, {{32.0, 139.3}, {50.7, 20.3}}, label: '数据源', hitPoint: {57.3, 149.5}
+         StaticText, {{32.0, 169.7}, {50.7, 20.3}}, label: '参照系', hitPoint: {57.3, 179.8}
+         StaticText, {{32.0, 169.7}, {338.0, 20.3}}, label: '参照系, 启动相对坐标', hitPoint: {201.0, 179.8}
+         StaticText, {{32.0, 200.0}, {104.3, 18.0}}, label: '姿态角（弧度）', hitPoint: {84.2, 209.0}
+         StaticText, {{32.0, 228.0}, {38.7, 20.3}}, label: 'Pitch', hitPoint: {51.3, 238.2}
+         StaticText, {{324.0, 228.0}, {46.0, 20.3}}, label: '3.930', hitPoint: {347.0, 238.2}
+         StaticText, {{32.0, 258.3}, {30.7, 20.3}}, label: 'Yaw', hitPoint: {47.3, 268.5}
+         StaticText, {{324.0, 258.3}, {46.0, 20.3}}, label: '7.460', hitPoint: {347.0, 268.5}
+         StaticText, {{32.0, 288.7}, {28.0, 20.3}}, label: 'Roll', hitPoint: {46.0, 298.8}
+         StaticText, {{324.0, 288.7}, {46.0, 20.3}}, label: '1.945', hitPoint: {347.0, 298.8}
+         StaticText, {{32.0, 323.0}, {168.7, 18.0}}, label: '设备轴角速度（弧度/秒）', hitPoint: {116.3, 332.0}
+         StaticText, {{32.0, 351.0}, {11.3, 20.3}}, label: 'X', hitPoint: {37.7, 361.2}
+         StaticText, {{324.0, 351.0}, {46.0, 20.3}}, label: '0.010', hitPoint: {347.0, 361.2}
+         StaticText, {{32.0, 381.3}, {11.0, 20.3}}, label: 'Y', hitPoint: {37.5, 391.5}
+         StaticText, {{316.7, 381.3}, {53.3, 20.3}}, label: '-0.020', hitPoint: {343.3, 391.5}
+         StaticText, {{32.0, 411.7}, {11.0, 20.3}}, label: 'Z', hitPoint: {37.5, 421.8}
+         StaticText, {{324.0, 411.7}, {46.0, 20.3}}, label: '0.030', hitPoint: {347.0, 421.8}
+         StaticText, {{32.0, 442.0}, {84.3, 20.3}}, label: '相机姿态流', hitPoint: {74.2, 452.2}
+         StaticText, {{32.0, 442.0}, {338.0, 20.3}}, identifier: 'camera.motionStatus', label: '相机姿态流, 采集中', hitPoint: {201.0, 452.2}
+         StaticText, {{32.0, 472.3}, {50.7, 20.3}}, label: '样本数', hitPoint: {57.3, 482.5}
+         StaticText, {{32.0, 472.3}, {338.0, 20.3}}, identifier: 'camera.motionSampleCount', label: '样本数, 383', hitPoint: {201.0, 482.5}
+        Other, {{16.0, 520.7}, {370.0, 295.3}}, identifier: 'sync.status', hitPoint: {201.0, 668.3}
+         StaticText, {{34.0, 538.0}, {94.3, 20.3}}, label: '实时同步', hitPoint: {81.2, 548.2}
+         Image, {{34.0, 538.0}, {16.7, 20.3}}, identifier: 'arrow.left.arrow.right', label: 'Left And Right Arrows', hitPoint: {42.3, 548.2}
+         StaticText, {{32.0, 569.7}, {104.3, 18.0}}, label: '最新状态已对齐', hitPoint: {84.2, 578.7}
+         StaticText, {{32.0, 597.7}, {101.3, 20.3}}, label: '视频接收时间', hitPoint: {82.7, 607.8}
+         StaticText, {{299.0, 597.7}, {71.0, 20.3}}, label: '14:21:38', hitPoint: {334.5, 607.8}
+         StaticText, {{32.0, 628.0}, {101.3, 20.3}}, label: '相机姿态时间', hitPoint: {82.7, 638.2}
+         StaticText, {{299.0, 628.0}, {71.0, 20.3}}, label: '14:21:38', hitPoint: {334.5, 638.2}
+         StaticText, {{32.0, 658.3}, {165.3, 20.3}}, label: '视频 / 相机姿态时间差', hitPoint: {114.7, 668.5}
+         StaticText, {{311.3, 658.3}, {58.7, 20.3}}, label: '0.000 s', hitPoint: {340.7, 668.5}
+         StaticText, {{32.0, 688.7}, {100.0, 20.3}}, label: '视频数据 age', hitPoint: {82.0, 698.8}
+         StaticText, {{311.3, 688.7}, {58.7, 20.3}}, label: '0.105 s', hitPoint: {340.7, 698.8}
+         StaticText, {{32.0, 719.0}, {133.7, 20.3}}, label: '相机姿态数据 age', hitPoint: {98.8, 729.2}
+         StaticText, {{311.3, 719.0}, {58.7, 20.3}}, label: '0.105 s', hitPoint: {340.7, 729.2}
+         StaticText, {{32.0, 749.3}, {64.3, 20.3}}, label: '帧 / 尺寸', hitPoint: {64.2, 759.5}
+         StaticText, {{243.3, 749.3}, {126.7, 20.3}}, label: '385 / 1280×720', hitPoint: {306.7, 759.5}
+         StaticText, {{32.0, 779.7}, {34.0, 20.3}}, label: '丢帧', hitPoint: {49.0, 789.8}
+         StaticText, {{359.7, 779.7}, {10.3, 20.3}}, label: '0', hitPoint: {364.8, 789.8}
+       Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+        Other, {{0.0, 0.0}, {402.0, 102.0}}, hitPoint: {201.0, 51.0}
+       Other, {{0.0, 0.0}, {402.0, 874.0}}, hitPoint: {201.0, 437.0}
+        Other, {{0.0, 0.0}, {402.0, 102.0}}, hitPoint: {201.0, 51.0}
+      StaticText, {{111.3, 818.0}, {179.3, 38.0}}, identifier: 'camera.placeholder', label: '模拟器 Mock 相机', hitPoint: {201.0, 837.0}
+       Image, {{127.3, 829.7}, {18.3, 14.3}}, identifier: 'camera.fill', label: 'Camera', hitPoint: {136.5, 836.8}
+       StaticText, {{127.3, 828.0}, {149.3, 18.0}}, label: '模拟器 Mock 相机', hitPoint: {202.0, 837.0}
