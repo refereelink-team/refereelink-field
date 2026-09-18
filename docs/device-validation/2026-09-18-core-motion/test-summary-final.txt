@@ -1,0 +1,263 @@
+================================================================================
+TEST RESULTS SUMMARY
+================================================================================
+Generated: 2026-09-18T08:14:20Z
+Total Results: 21
+================================================================================
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 1/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/dockKitAxesUsePitchYawRollInRadians()
+TEST_DISPLAY_NAME: dockKitAxesUsePitchYawRollInRadians()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 6
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 2/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/connectionStatesRepresentReconnectTransitions()
+TEST_DISPLAY_NAME: connectionStatesRepresentReconnectTransitions()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 36
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 3/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/coordinatorMergesLatestVideoAndCameraMotionState()
+TEST_DISPLAY_NAME: coordinatorMergesLatestVideoAndCameraMotionState()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 64
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 4/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/coordinatorMarksOldDataAsStale()
+TEST_DISPLAY_NAME: coordinatorMarksOldDataAsStale()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 125
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 5/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/coordinatorDoesNotAgeIdentityWithoutMotionState()
+TEST_DISPLAY_NAME: coordinatorDoesNotAgeIdentityWithoutMotionState()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 163
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 6/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/cameraMotionMapsAttitudeRatesAndReferenceFrame()
+TEST_DISPLAY_NAME: cameraMotionMapsAttitudeRatesAndReferenceFrame()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 207
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 7/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/cameraMotionTimestampConvertsUptimeToDate()
+TEST_DISPLAY_NAME: cameraMotionTimestampConvertsUptimeToDate()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 234
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 8/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockCameraMotionProducesDeterministicSamples()
+TEST_DISPLAY_NAME: mockCameraMotionProducesDeterministicSamples()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 246
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 9/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockCameraMotionScenariosExposeUnavailableErrorAndStale()
+TEST_DISPLAY_NAME: mockCameraMotionScenariosExposeUnavailableErrorAndStale()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 265
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 10/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockDockKitProducesDeterministicConnectionAndMotion()
+TEST_DISPLAY_NAME: mockDockKitProducesDeterministicConnectionAndMotion()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 297
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 11/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockDockKitNoSampleAndStreamTerminationAreObservable()
+TEST_DISPLAY_NAME: mockDockKitNoSampleAndStreamTerminationAreObservable()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 320
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 12/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockDockKitStreamErrorKeepsConnectionSeparateFromMotionFailure()
+TEST_DISPLAY_NAME: mockDockKitStreamErrorKeepsConnectionSeparateFromMotionFailure()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 349
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 13/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockDockKitReconnectResetsSampleCountAndClearsOldMotion()
+TEST_DISPLAY_NAME: mockDockKitReconnectResetsSampleCountAndClearsOldMotion()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 366
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 14/21
+TEST_TARGET: RefereeLinkTests
+TEST_IDENTIFIER: RefereeLinkTests/mockCameraProducesFramesWithPresentationTime()
+TEST_DISPLAY_NAME: mockCameraProducesFramesWithPresentationTime()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkTests/RefereeLinkTests.swift
+TEST_LINE_NUMBER: 387
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 15/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testPageStartsWithAccessibleStatusSections()
+TEST_DISPLAY_NAME: testPageStartsWithAccessibleStatusSections()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 16
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 16/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testMockConnectionUpdatesIdentityAndMetrics()
+TEST_DISPLAY_NAME: testMockConnectionUpdatesIdentityAndMetrics()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 39
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 17/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testErrorStateDoesNotCrash()
+TEST_DISPLAY_NAME: testErrorStateDoesNotCrash()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 81
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 18/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testCameraMotionErrorStateDoesNotCrash()
+TEST_DISPLAY_NAME: testCameraMotionErrorStateDoesNotCrash()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 92
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 19/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testCameraMotionStaleStateIsAccessible()
+TEST_DISPLAY_NAME: testCameraMotionStaleStateIsAccessible()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 108
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 20/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testPhysicalSmokeStatusSectionsStart()
+TEST_DISPLAY_NAME: testPhysicalSmokeStatusSectionsStart()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 125
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+--------------------------------------------------------------------------------
+TEST_RESULT_INDEX: 21/21
+TEST_TARGET: RefereeLinkUITests
+TEST_IDENTIFIER: RefereeLinkUITests/testLaunchPerformance()
+TEST_DISPLAY_NAME: testLaunchPerformance()
+TEST_STATE: Passed
+TEST_FILE_PATH: RefereeLink/RefereeLinkUITests/RefereeLinkUITests.swift
+TEST_LINE_NUMBER: 155
+TEST_TAGS: (none)
+
+TEST_ISSUE_COUNT: 0
+
+
+================================================================================
+END OF TEST RESULTS SUMMARY
+================================================================================

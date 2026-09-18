@@ -1,17 +1,13 @@
-//
-//  RefereeLinkApp.swift
-//  RefereeLink
-//
-//  Created by Cayson Yin on 9/16/26.
-//
-
 import SwiftUI
 
 @main
+@MainActor
 struct RefereeLinkApp: App {
+    @State private var model = LiveCaptureModel()
+
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            ContentView(model: model)
         }
     }
 }

@@ -1,0 +1,9 @@
+2026-09-18 14:20:53.970958+0800 [13376:170335] [XPC] [C:1] Ignoring activation message because no connection exists for 1
+
+2026-09-18 14:20:58.389054+0800 [13376:169878] [AXValidations] AX Safe category class 'SFBarButtonGroupContainerAccessibility' was not found!
+
+objc[13376]: Class UIAccessibilityLoaderWebShared is implemented in both /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.usvrnG/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebKit.axbundle/WebKit (0x11d040398) and /private/var/run/com.apple.security.cryptexd/mnt/com.apple.iPhoneOS.SimulatorRuntime-v24.1.434.0.usvrnG/Library/Developer/CoreSimulator/Profiles/Runtimes/iOS 27.0.simruntime/Contents/Resources/RuntimeRoot/System/Library/AccessibilityBundles/WebCore.axbundle/WebCore (0x11d170310). This may cause spurious casting failures and mysterious crashes. One of the duplicates must be removed or renamed.
+
+2026-09-18 14:20:59.312786+0800 [13376:169878] [AXValidations] AX Safe category class 'SLHighlightDisambiguationPillViewAccessibility' was not found!
+
+2026-09-18 14:21:37.191114+0800 [13376:169878] [XPCErrors] non-launching port is incompatible with service identifier "com.apple.PointerUI.pointeruid.default-service"

@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		DA091D66305B8DC300859544 /* AGENTS.md in Resources */ = {isa = PBXBuildFile; fileRef = DA091D65305B8DC300859544 /* AGENTS.md */; };
 		DA8425AD305ACB6300AF8284 /* RefereeLink Watch App Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = DA84258F305ACB6100AF8284 /* RefereeLink Watch App Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DA8425B9305ACBF700AF8284 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = DA8425B8305ACBF300AF8284 /* .gitignore */; };
 /* End PBXBuildFile section */
@@ -62,6 +63,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		DA091D65305B8DC300859544 /* AGENTS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = AGENTS.md; sourceTree = "<group>"; };
 		DA842563305AC88300AF8284 /* RefereeLink.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = RefereeLink.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA842570305AC88400AF8284 /* RefereeLinkTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RefereeLinkTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA84257A305AC88400AF8284 /* RefereeLinkUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = RefereeLinkUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -154,6 +156,7 @@
 		DA84255A305AC88300AF8284 = {
 			isa = PBXGroup;
 			children = (
+				DA091D65305B8DC300859544 /* AGENTS.md */,
 				DA8425B8305ACBF300AF8284 /* .gitignore */,
 				DA842565305AC88300AF8284 /* RefereeLink */,
 				DA842573305AC88400AF8284 /* RefereeLinkTests */,
@@ -368,6 +371,7 @@
 			isa = PBXResourcesBuildPhase;
 			files = (
 				DA8425B9305ACBF700AF8284 /* .gitignore in Resources */,
+				DA091D66305B8DC300859544 /* AGENTS.md in Resources */,
 			);
 		};
 		DA84256E305AC88400AF8284 /* Resources */ = {
@@ -592,7 +596,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RefereeLink/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RefereeLink uses the camera to capture match video for real-time referee assistance.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RefereeLink connects to the local match server for video streaming, telemetry, and referee events.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -631,7 +634,6 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = RefereeLink/Info.plist;
 				INFOPLIST_KEY_NSCameraUsageDescription = "RefereeLink uses the camera to capture match video for real-time referee assistance.";
-				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "RefereeLink connects to the local match server for video streaming, telemetry, and referee events.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
