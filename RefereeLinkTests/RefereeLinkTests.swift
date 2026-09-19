@@ -418,6 +418,63 @@ struct RefereeLinkTests {
     }
 
     @Test
+    func transportPTSIsRelativeToTheEncodedStreamEpoch() {
+        #expect(
+            CaptureClock.transportPTS90k(
+                presentationTimestampValue: 1_000,
+                presentationTimestampScale: 1_000,
+                originValue: 1_000
+            ) == 0
+        )
+        #expect(
+            CaptureClock.transportPTS90k(
+                presentationTimestampValue: 1_033,
+                presentationTimestampScale: 1_000,
+                originValue: 1_000
+            ) == 2_970
+        )
+        #expect(
+            CaptureClock.transportPTS90k(
+                presentationTimestampValue: 1_264_135_522_700,
+                presentationTimestampScale: 10_000,
+                originValue: 1_264_135_522_700
+            ) == 0
+        )
+        #expect(
+            CaptureClock.transportPTS90k(
+                presentationTimestampValue: 1_000,
+                presentationTimestampScale: 1_000,
+                originValue: nil
+            ) == nil
+        )
+    }
+
+    @Test
+    func fieldWirePreservesRelativeTransportPTSWithoutSynthesizingAbsolutePTS() throws {
+        let frame = CapturedFrameMetadata(
+            sessionId: UUID(),
+            streamEpoch: 3,
+            frameId: 1,
+            tUs: 0,
+            captureUnixUs: 1_700_000_000_000_000,
+            presentationTimestampValue: 1_264_135_522_700,
+            presentationTimestampScale: 10_000,
+            transportPts90k: 0,
+            width: 1280,
+            height: 720,
+            droppedFrameCount: 0,
+            cameraConfigurationId: "default-720p30",
+            cameraMotionSampleId: nil,
+            cameraMotionAgeUs: nil,
+            poseMissingReason: nil
+        )
+
+        let object = try FieldWire.jsonObject(frame) as! [String: Any]
+        #expect((object["transport_pts90k"] as? NSNumber)?.int64Value == 0)
+        #expect((object["presentation_timestamp_value"] as? NSNumber)?.int64Value == 1_264_135_522_700)
+    }
+
+    @Test
     func captureContractRoundTripsManifestAndMotionSample() throws {
         let sessionID = UUID(uuidString: "E2D2A4EA-C18A-42ED-B0AE-88F2FDCC7E50")!
         let manifest = CaptureSessionManifest.initial(
@@ -468,6 +525,48 @@ struct RefereeLinkTests {
         #expect(decodedSample == sample)
         #expect(decodedSample.referenceFrame == "xArbitraryZVertical")
         #expect(decodedSample.rotationRateZ == 0.03)
+    }
+
+    @Test
+    func fieldWireUsesSnakeCaseAndUnifiedTelemetryBatch() throws {
+        let sample = CameraMotionSample(
+            sampleId: 7,
+            tUs: 123_000,
+            sourceTimestamp: 42.123,
+            pitch: 0.1,
+            yaw: -0.2,
+            roll: 0.3,
+            quaternionX: 0,
+            quaternionY: 0,
+            quaternionZ: 0,
+            quaternionW: 1,
+            rotationRateX: 0.01,
+            rotationRateY: -0.02,
+            rotationRateZ: 0.03,
+            gravityX: 0,
+            gravityY: 0,
+            gravityZ: -1,
+            userAccelerationX: 0,
+            userAccelerationY: 0,
+            userAccelerationZ: 0,
+            referenceFrame: "xArbitraryZVertical",
+            status: "streaming",
+            error: nil
+        )
+        let item = try FieldTelemetryItem(type: "camera_motion", payload: sample)
+        let batch = FieldTelemetryBatch(
+            type: "telemetry_batch",
+            schemaVersion: "1.0",
+            sessionId: UUID(),
+            streamEpoch: 1,
+            clientSequence: 3,
+            items: [item]
+        )
+        let json = try String(decoding: FieldWire.encoder.encode(batch), as: UTF8.self)
+        #expect(json.contains("telemetry_batch"))
+        #expect(json.contains("client_sequence"))
+        #expect(json.contains("sample_id"))
+        #expect(!json.contains("sampleId"))
     }
 
     @Test

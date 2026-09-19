@@ -1,4 +1,5 @@
 import AVFoundation
+import CryptoKit
 import Foundation
 import os
 
@@ -30,6 +31,7 @@ protocol FieldTransport: AnyObject, Sendable {
     var statuses: AsyncStream<TransportStatus> { get }
     func connect(configuration: FieldEndpointConfiguration, sessionId: UUID) async
     func allocateLive(sessionId: UUID) async -> LiveTransportAllocation?
+    func activateLiveEpoch(_ streamEpoch: Int) async
     func disconnect() async
     func send(frame: CapturedFrameMetadata) async
     func send(motion: CameraMotionSample) async
@@ -55,6 +57,11 @@ actor URLSessionFieldTransport: FieldTransport {
     private var sessionId: UUID?
     private var socket: URLSessionWebSocketTask?
     private var receiveTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var flushTask: Task<Void, Never>?
+    private var pendingItems: [[String: Any]] = []
+    private var clientSequence = 0
+    private var activeLiveEpoch: Int?
     private var status = TransportStatus(
         state: .disabled,
         streamEpoch: 0,
@@ -101,7 +108,7 @@ actor URLSessionFieldTransport: FieldTransport {
                 deviceName: configuration.deviceName,
                 capabilities: ["srt", "wss", "offline_archive", "core_motion"]
             )
-            request.httpBody = try JSONEncoder.refereeLink.encode(body)
+            request.httpBody = try FieldWire.encoder.encode(body)
             let (_, registrationResponse) = try await URLSession.shared.data(for: request)
             try validate(response: registrationResponse)
 
@@ -111,11 +118,13 @@ actor URLSessionFieldTransport: FieldTransport {
             let task = URLSession.shared.webSocketTask(with: webSocketRequest)
             socket = task
             task.resume()
+            clientSequence = 0
             try await sendJSON([
                 "type": "hello",
-                "schema_version": "1.0",
+                "schema_version": FieldWire.schemaVersion,
                 "session_id": sessionId.uuidString,
-                "device_id": CaptureArchiveRecorder.deviceId.uuidString
+                "device_id": CaptureArchiveRecorder.deviceId.uuidString,
+                "client_sequence": clientSequence
             ])
             receiveTask = Task { [weak self] in
                 await self?.receiveLoop()
@@ -128,8 +137,17 @@ actor URLSessionFieldTransport: FieldTransport {
     }
 
     func disconnect() async {
+        if let activeLiveEpoch, let sessionId {
+            await releaseLive(sessionId: sessionId, epoch: activeLiveEpoch)
+        }
         receiveTask?.cancel()
         receiveTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
+        flushTask?.cancel()
+        flushTask = nil
+        pendingItems.removeAll()
+        activeLiveEpoch = nil
         socket?.cancel(with: .normalClosure, reason: nil)
         socket = nil
         updateStatus(state: .disabled, error: nil)
@@ -149,16 +167,8 @@ actor URLSessionFieldTransport: FieldTransport {
             request.httpBody = body
             let (data, response) = try await URLSession.shared.data(for: request)
             try validate(response: response)
-            let allocation = try JSONDecoder().decode(LiveTransportAllocation.self, from: data)
-            status = TransportStatus(
-                state: status.state,
-                streamEpoch: allocation.streamEpoch,
-                sentFrameCount: status.sentFrameCount,
-                sentMotionCount: status.sentMotionCount,
-                droppedFrameCount: status.droppedFrameCount,
-                lastError: nil
-            )
-            statusContinuation.yield(status)
+            let allocation = try FieldWire.decoder.decode(LiveTransportAllocation.self, from: data)
+            activeLiveEpoch = allocation.streamEpoch
             return allocation
         } catch {
             logger.error("Live video allocation failed: \(error.localizedDescription, privacy: .public)")
@@ -167,8 +177,29 @@ actor URLSessionFieldTransport: FieldTransport {
         }
     }
 
+    func activateLiveEpoch(_ streamEpoch: Int) async {
+        guard activeLiveEpoch == streamEpoch else { return }
+
+        // Items produced while the SRT connection was being negotiated belong
+        // to no encoded epoch. Do not relabel them under the new epoch when a
+        // delayed flush task wakes up.
+        flushTask?.cancel()
+        flushTask = nil
+        pendingItems.removeAll(keepingCapacity: true)
+
+        status = TransportStatus(
+            state: status.state,
+            streamEpoch: streamEpoch,
+            sentFrameCount: status.sentFrameCount,
+            sentMotionCount: status.sentMotionCount,
+            droppedFrameCount: status.droppedFrameCount,
+            lastError: nil
+        )
+        statusContinuation.yield(status)
+    }
+
     func send(frame: CapturedFrameMetadata) async {
-        await sendTelemetry(type: "frame_batch", payload: frame)
+        await enqueueTelemetry(type: "frame", payload: frame)
         status = TransportStatus(
             state: status.state,
             streamEpoch: status.streamEpoch,
@@ -181,7 +212,7 @@ actor URLSessionFieldTransport: FieldTransport {
     }
 
     func send(motion: CameraMotionSample) async {
-        await sendTelemetry(type: "motion_batch", payload: motion)
+        await enqueueTelemetry(type: "camera_motion", payload: motion)
         status = TransportStatus(
             state: status.state,
             streamEpoch: status.streamEpoch,
@@ -194,7 +225,7 @@ actor URLSessionFieldTransport: FieldTransport {
     }
 
     func send(dock: DockDiagnosticEvent) async {
-        await sendTelemetry(type: "dock_state", payload: dock)
+        await enqueueTelemetry(type: "dock", payload: dock)
     }
 
     func send(sample: CameraFrameSample) async {
@@ -211,6 +242,12 @@ actor URLSessionFieldTransport: FieldTransport {
         request.httpMethod = "PUT"
         request.setValue("application/octet-stream", forHTTPHeaderField: "Content-Type")
         addAuthorization(to: &request)
+        let data = try Data(contentsOf: file)
+        request.setValue(String(data.count), forHTTPHeaderField: "Content-Length")
+        request.setValue(
+            SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined(),
+            forHTTPHeaderField: "Content-SHA256"
+        )
         let (_, response) = try await URLSession.shared.upload(for: request, fromFile: file)
         try validate(response: response)
     }
@@ -224,18 +261,55 @@ actor URLSessionFieldTransport: FieldTransport {
         }
     }
 
-    private func sendTelemetry<T: Encodable>(type: String, payload: T) async {
+    private func enqueueTelemetry<T: Encodable>(type: String, payload: T) async {
         guard socket != nil else { return }
         do {
-            let payloadData = try JSONEncoder.refereeLink.encode(payload)
-            let payloadObject = try JSONSerialization.jsonObject(with: payloadData)
-            try await sendJSON([
-                "type": type,
-                "session_id": sessionId?.uuidString ?? "",
-                "payload": payloadObject
-            ])
+            var item: [String: Any] = ["type": type]
+            let payloadObject = try FieldWire.jsonObject(payload)
+            if let fields = payloadObject as? [String: Any] {
+                item.merge(fields) { _, new in new }
+            } else {
+                item["payload"] = payloadObject
+            }
+            guard pendingItems.count < 256 else {
+                updateStatus(state: .reconnecting, error: "实时参数队列已满")
+                return
+            }
+            pendingItems.append(item)
+            if flushTask == nil {
+                flushTask = Task { [weak self] in
+                    try? await Task.sleep(nanoseconds: 50_000_000)
+                    guard !Task.isCancelled else { return }
+                    await self?.flushTelemetry()
+                }
+            }
         } catch {
             updateStatus(state: .reconnecting, error: error.localizedDescription)
+        }
+    }
+
+    private func flushTelemetry() async {
+        defer { flushTask = nil }
+        guard let sessionId, socket != nil, !pendingItems.isEmpty else { return }
+        let items = pendingItems
+        pendingItems.removeAll(keepingCapacity: true)
+        clientSequence += 1
+        do {
+            try await sendJSON([
+                "type": "telemetry_batch",
+                "schema_version": FieldWire.schemaVersion,
+                "session_id": sessionId.uuidString,
+                "stream_epoch": status.streamEpoch,
+                "client_sequence": clientSequence,
+                "items": items
+            ])
+            // A single transient send failure must not leave the UI stuck in
+            // “reconnecting” after the same socket has recovered and accepted
+            // subsequent telemetry.
+            markConnectedIfSocketAlive()
+        } catch {
+            updateStatus(state: .reconnecting, error: error.localizedDescription)
+            scheduleReconnect()
         }
     }
 
@@ -248,12 +322,70 @@ actor URLSessionFieldTransport: FieldTransport {
     private func receiveLoop() async {
         while !Task.isCancelled, let socket {
             do {
-                _ = try await socket.receive()
+                let message = try await socket.receive()
+                switch message {
+                case .string(let string):
+                    if let data = string.data(using: .utf8) { handleServerMessage(data) }
+                case .data(let data):
+                    handleServerMessage(data)
+                @unknown default:
+                    break
+                }
             } catch {
                 guard !Task.isCancelled else { return }
                 updateStatus(state: .reconnecting, error: error.localizedDescription)
+                scheduleReconnect()
                 return
             }
+        }
+    }
+
+    private func handleServerMessage(_ data: Data) {
+        guard let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let type = object["type"] as? String else { return }
+        switch type {
+        case "hello_ack", "telemetry_ack":
+            markConnectedIfSocketAlive()
+            return
+        case "error":
+            updateStatus(state: .reconnecting, error: object["detail"] as? String ?? "后端拒绝了实时参数")
+        default:
+            return
+        }
+    }
+
+    private func scheduleReconnect() {
+        guard reconnectTask == nil, let configuration, let sessionId else { return }
+        reconnectTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            await self?.reconnectSocket(configuration: configuration, sessionId: sessionId)
+        }
+    }
+
+    private func reconnectSocket(configuration: FieldEndpointConfiguration, sessionId: UUID) async {
+        defer { reconnectTask = nil }
+        guard let baseURL = configuration.baseURL, !Task.isCancelled else { return }
+        do {
+            let webSocketURL = try makeWebSocketURL(from: baseURL, sessionId: sessionId)
+            var request = URLRequest(url: webSocketURL)
+            addAuthorization(to: &request)
+            let task = URLSession.shared.webSocketTask(with: request)
+            socket = task
+            task.resume()
+            try await sendJSON([
+                "type": "hello",
+                "schema_version": FieldWire.schemaVersion,
+                "session_id": sessionId.uuidString,
+                "device_id": CaptureArchiveRecorder.deviceId.uuidString,
+                "client_sequence": clientSequence
+            ])
+            receiveTask?.cancel()
+            receiveTask = Task { [weak self] in await self?.receiveLoop() }
+            updateStatus(state: .connected, error: nil)
+        } catch {
+            updateStatus(state: .reconnecting, error: error.localizedDescription)
+            scheduleReconnect()
         }
     }
 
@@ -272,6 +404,25 @@ actor URLSessionFieldTransport: FieldTransport {
         request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
     }
 
+    private func releaseLive(sessionId: UUID, epoch: Int) async {
+        guard let baseURL = configuration?.baseURL else { return }
+        var request = URLRequest(
+            url: baseURL.appendingPathComponent(
+                "api/v1/field/sessions/\(sessionId.uuidString)/live/\(epoch)"
+            )
+        )
+        request.httpMethod = "DELETE"
+        addAuthorization(to: &request)
+        do {
+            let (_, response) = try await URLSession.shared.data(for: request)
+            try validate(response: response)
+        } catch {
+            logger.error(
+                "live epoch release failed epoch=\(epoch) error=\(String(reflecting: error), privacy: .public)"
+            )
+        }
+    }
+
     private func updateStatus(state: TransportConnectionState, error: String?) {
         status = TransportStatus(
             state: state,
@@ -282,6 +433,11 @@ actor URLSessionFieldTransport: FieldTransport {
             lastError: error
         )
         statusContinuation.yield(status)
+    }
+
+    private func markConnectedIfSocketAlive() {
+        guard socket != nil, status.state == .reconnecting else { return }
+        updateStatus(state: .connected, error: nil)
     }
 }
 
@@ -316,6 +472,10 @@ import HaishinKit
 import SRTHaishinKit
 
 actor NativeSRTVideoTransport: RealtimeVideoTransport {
+    private let logger = Logger(
+        subsystem: "io.github.refereelink-team.RefereeLink",
+        category: "SRTVideo"
+    )
     private var connection: SRTConnection?
     private var stream: SRTStream?
     private var pendingSamples: [CMSampleBuffer] = []
@@ -333,27 +493,39 @@ actor NativeSRTVideoTransport: RealtimeVideoTransport {
             URLQueryItem(name: "transtype", value: "live"),
             URLQueryItem(name: "latency", value: String(allocation.latencyMs)),
             URLQueryItem(name: "tlpktdrop", value: "1"),
-            URLQueryItem(name: "payloadsize", value: "1128"),
+            URLQueryItem(name: "passphrase", value: allocation.streamToken),
             URLQueryItem(name: "streamid", value: streamId)
         ]
         guard let url = components.url else { throw FieldTransportError.invalidEndpoint }
-        try await connection.connect(url)
-        let stream = SRTStream(connection: connection)
-        try await stream.setVideoSettings(
-            VideoCodecSettings(
-                videoSize: CGSize(width: 1280, height: 720),
-                bitRate: 1_500_000,
-                profileLevel: kVTProfileLevel_H264_Baseline_3_1 as String,
-                maxKeyFrameIntervalDuration: 1,
-                allowFrameReordering: false,
-                isLowLatencyRateControlEnabled: true,
-                expectedFrameRate: 30
-            )
+        logger.info(
+            "connecting host=\(allocation.srtHost, privacy: .public) port=\(allocation.srtPort) epoch=\(allocation.streamEpoch)"
         )
-        await stream.setExpectedMedias([.video])
-        await stream.publish()
-        self.connection = connection
-        self.stream = stream
+        do {
+            try await connection.connect(url)
+            let isConnected = await connection.connected
+            logger.info("connected epoch=\(allocation.streamEpoch) isConnected=\(isConnected)")
+            let stream = SRTStream(connection: connection)
+            try await stream.setVideoSettings(
+                VideoCodecSettings(
+                    videoSize: CGSize(width: 1280, height: 720),
+                    bitRate: 1_500_000,
+                    profileLevel: kVTProfileLevel_H264_Baseline_3_1 as String,
+                    maxKeyFrameIntervalDuration: 1,
+                    allowFrameReordering: false,
+                    isLowLatencyRateControlEnabled: true,
+                    expectedFrameRate: 30
+                )
+            )
+            await stream.setExpectedMedias([.video])
+            await stream.publish()
+            logger.info("publishing video epoch=\(allocation.streamEpoch)")
+            self.connection = connection
+            self.stream = stream
+        } catch {
+            logger.error("connect failed epoch=\(allocation.streamEpoch) error=\(String(reflecting: error), privacy: .public)")
+            await connection.close()
+            throw error
+        }
     }
 
     func append(_ sample: CMSampleBuffer) async {
@@ -396,12 +568,30 @@ extension FieldEndpointConfiguration {
     private static let storageKey = "RefereeLink.fieldEndpoint"
 
     static func load() -> FieldEndpointConfiguration? {
+        let arguments = ProcessInfo.processInfo.arguments
+        if let baseURLString = argumentValue("--field-endpoint", in: arguments),
+           let bearerToken = argumentValue("--field-token", in: arguments),
+           !baseURLString.isEmpty,
+           !bearerToken.isEmpty {
+            return FieldEndpointConfiguration(
+                baseURLString: baseURLString,
+                bearerToken: bearerToken,
+                deviceName: argumentValue("--field-device-name", in: arguments) ?? "iPhone"
+            )
+        }
         guard let data = UserDefaults.standard.data(forKey: storageKey),
               let configuration = try? JSONDecoder().decode(FieldEndpointConfiguration.self, from: data),
               configuration.baseURL != nil else {
             return nil
         }
         return configuration
+    }
+
+    private static func argumentValue(_ name: String, in arguments: [String]) -> String? {
+        guard let index = arguments.firstIndex(of: name), arguments.indices.contains(index + 1) else {
+            return nil
+        }
+        return arguments[index + 1]
     }
 
     func save() {

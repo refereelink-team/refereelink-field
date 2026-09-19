@@ -55,6 +55,9 @@ struct ContentView: View {
         .task {
             if model.shouldAutoStart {
                 await model.start()
+                if model.shouldAutoStartRealtime {
+                    await model.startCapture(mode: .realtime)
+                }
             }
         }
         .onDisappear {

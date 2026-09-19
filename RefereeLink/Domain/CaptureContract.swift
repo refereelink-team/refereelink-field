@@ -78,6 +78,10 @@ nonisolated struct CapturedFrameMetadata: Codable, Equatable, Sendable {
     let captureUnixUs: Int64
     let presentationTimestampValue: Int64?
     let presentationTimestampScale: Int32?
+    /// MPEG-TS PTS in the current live stream epoch's 90 kHz clock.
+    /// This is relative to the first encoded frame in the epoch; it is not the
+    /// absolute CMSampleBuffer presentation timestamp.
+    let transportPts90k: Int64?
     let width: Int
     let height: Int
     let droppedFrameCount: Int
@@ -85,6 +89,40 @@ nonisolated struct CapturedFrameMetadata: Codable, Equatable, Sendable {
     let cameraMotionSampleId: Int?
     let cameraMotionAgeUs: Int64?
     let poseMissingReason: String?
+
+    init(
+        sessionId: UUID,
+        streamEpoch: Int,
+        frameId: Int,
+        tUs: Int64,
+        captureUnixUs: Int64,
+        presentationTimestampValue: Int64?,
+        presentationTimestampScale: Int32?,
+        transportPts90k: Int64? = nil,
+        width: Int,
+        height: Int,
+        droppedFrameCount: Int,
+        cameraConfigurationId: String,
+        cameraMotionSampleId: Int?,
+        cameraMotionAgeUs: Int64?,
+        poseMissingReason: String?
+    ) {
+        self.sessionId = sessionId
+        self.streamEpoch = streamEpoch
+        self.frameId = frameId
+        self.tUs = tUs
+        self.captureUnixUs = captureUnixUs
+        self.presentationTimestampValue = presentationTimestampValue
+        self.presentationTimestampScale = presentationTimestampScale
+        self.transportPts90k = transportPts90k
+        self.width = width
+        self.height = height
+        self.droppedFrameCount = droppedFrameCount
+        self.cameraConfigurationId = cameraConfigurationId
+        self.cameraMotionSampleId = cameraMotionSampleId
+        self.cameraMotionAgeUs = cameraMotionAgeUs
+        self.poseMissingReason = poseMissingReason
+    }
 }
 
 nonisolated struct DockDiagnosticEvent: Codable, Equatable, Sendable {
@@ -179,5 +217,28 @@ nonisolated enum CaptureClock {
     static func unixDate(from sourceTimestamp: TimeInterval, anchor: CaptureClockAnchor) -> Date {
         Date(timeIntervalSince1970: Double(anchor.wallClockUnixUs) / 1_000_000 +
              sourceTimestamp - Double(anchor.systemUptimeUs) / 1_000_000)
+    }
+
+    static func transportPTS90k(
+        presentationTimestampValue: Int64?,
+        presentationTimestampScale: Int32?,
+        originValue: Int64?
+    ) -> Int64? {
+        guard let presentationTimestampValue,
+              let presentationTimestampScale,
+              let originValue,
+              presentationTimestampScale > 0 else {
+            return nil
+        }
+
+        let delta = presentationTimestampValue.subtractingReportingOverflow(originValue)
+        let scaled = delta.partialValue.multipliedReportingOverflow(by: 90_000)
+        guard !delta.overflow, !scaled.overflow else {
+            return Int64(
+                (Double(delta.partialValue) * 90_000.0) /
+                    Double(presentationTimestampScale)
+            )
+        }
+        return scaled.partialValue / Int64(presentationTimestampScale)
     }
 }
