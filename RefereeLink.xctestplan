@@ -1,0 +1,33 @@
+{
+  "configurations" : [
+    {
+      "id" : "A1B2C3D4-E5F6-47A8-9012-3456789ABCDE",
+      "name" : "Testing",
+      "options" : {
+        "testTimeoutsEnabled" : true
+      }
+    }
+  ],
+  "defaultOptions" : {
+    "language" : "en",
+    "region" : "en_US",
+    "testTimeoutsEnabled" : true
+  },
+  "testTargets" : [
+    {
+      "target" : {
+        "containerPath" : "container:RefereeLink.xcodeproj",
+        "identifier" : "DA84256F305AC88400AF8284",
+        "name" : "RefereeLinkTests"
+      }
+    },
+    {
+      "target" : {
+        "containerPath" : "container:RefereeLink.xcodeproj",
+        "identifier" : "DA842579305AC88400AF8284",
+        "name" : "RefereeLinkUITests"
+      }
+    }
+  ],
+  "version" : 1
+}

@@ -28,6 +28,7 @@ actor NativeCameraMotionSource: CameraMotionSource {
     }()
     private var hasStarted = false
     private var sampleCount = 0
+    private var clockAnchor = CaptureClock.nowAnchor()
 
     init() {
         var continuation: AsyncStream<CameraMotionSnapshot>.Continuation?
@@ -42,6 +43,7 @@ actor NativeCameraMotionSource: CameraMotionSource {
 
         hasStarted = true
         sampleCount = 0
+        clockAnchor = CaptureClock.nowAnchor()
         logger.info("Camera motion source starting at 60 Hz with xArbitraryZVertical.")
         continuation.yield(.waiting)
 
@@ -62,6 +64,7 @@ actor NativeCameraMotionSource: CameraMotionSource {
         }
 
         motionManager.deviceMotionUpdateInterval = 1.0 / 60.0
+        let anchor = clockAnchor
         motionManager.startDeviceMotionUpdates(
             using: referenceFrame,
             to: callbackQueue
@@ -75,11 +78,17 @@ actor NativeCameraMotionSource: CameraMotionSource {
                     rotationRateY: motion.rotationRate.y,
                     rotationRateZ: motion.rotationRate.z,
                     sourceTimestamp: motion.timestamp,
-                    timestamp: CameraMotionTimestamp.date(
-                        from: motion.timestamp,
-                        now: Date(),
-                        systemUptime: ProcessInfo.processInfo.systemUptime
-                    )
+                    timestamp: CaptureClock.unixDate(from: motion.timestamp, anchor: anchor),
+                    quaternionX: motion.attitude.quaternion.x,
+                    quaternionY: motion.attitude.quaternion.y,
+                    quaternionZ: motion.attitude.quaternion.z,
+                    quaternionW: motion.attitude.quaternion.w,
+                    gravityX: motion.gravity.x,
+                    gravityY: motion.gravity.y,
+                    gravityZ: motion.gravity.z,
+                    userAccelerationX: motion.userAcceleration.x,
+                    userAccelerationY: motion.userAcceleration.y,
+                    userAccelerationZ: motion.userAcceleration.z
                 )
             }
             let errorMessage = error.map(Self.describe)
@@ -143,7 +152,17 @@ actor NativeCameraMotionSource: CameraMotionSource {
                 sampleCount: sampleCount,
                 status: .streaming,
                 referenceFrame: .xArbitraryZVertical,
-                errorMessage: nil
+                errorMessage: nil,
+                quaternionX: sample.quaternionX,
+                quaternionY: sample.quaternionY,
+                quaternionZ: sample.quaternionZ,
+                quaternionW: sample.quaternionW,
+                gravityX: sample.gravityX,
+                gravityY: sample.gravityY,
+                gravityZ: sample.gravityZ,
+                userAccelerationX: sample.userAccelerationX,
+                userAccelerationY: sample.userAccelerationY,
+                userAccelerationZ: sample.userAccelerationZ
             )
         )
     }
@@ -162,6 +181,16 @@ actor NativeCameraMotionSource: CameraMotionSource {
         let rotationRateZ: Double
         let sourceTimestamp: TimeInterval
         let timestamp: Date
+        let quaternionX: Double
+        let quaternionY: Double
+        let quaternionZ: Double
+        let quaternionW: Double
+        let gravityX: Double
+        let gravityY: Double
+        let gravityZ: Double
+        let userAccelerationX: Double
+        let userAccelerationY: Double
+        let userAccelerationZ: Double
     }
 }
 #else

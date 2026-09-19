@@ -10,6 +10,8 @@
 		DA091D66305B8DC300859544 /* AGENTS.md in Resources */ = {isa = PBXBuildFile; fileRef = DA091D65305B8DC300859544 /* AGENTS.md */; };
 		DA8425AD305ACB6300AF8284 /* RefereeLink Watch App Watch App.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = DA84258F305ACB6100AF8284 /* RefereeLink Watch App Watch App.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		DA8425B9305ACBF700AF8284 /* .gitignore in Resources */ = {isa = PBXBuildFile; fileRef = DA8425B8305ACBF300AF8284 /* .gitignore */; };
+		F10000010000000000000001 /* SRTHaishinKit in Frameworks */ = {isa = PBXBuildFile; productRef = F10000020000000000000001 /* SRTHaishinKit */; };
+		F10000060000000000000001 /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = F10000050000000000000001 /* ZIPFoundation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -123,6 +125,8 @@
 		DA842560305AC88300AF8284 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
+				F10000010000000000000001 /* SRTHaishinKit in Frameworks */,
+				F10000060000000000000001 /* ZIPFoundation in Frameworks */,
 			);
 		};
 		DA84256D305AC88400AF8284 /* Frameworks */ = {
@@ -202,6 +206,10 @@
 				DA842565305AC88300AF8284 /* RefereeLink */,
 			);
 			name = RefereeLink;
+			packageProductDependencies = (
+				F10000020000000000000001 /* SRTHaishinKit */,
+				F10000050000000000000001 /* ZIPFoundation */,
+			);
 			productName = RefereeLink;
 			productReference = DA842563305AC88300AF8284 /* RefereeLink.app */;
 			productType = "com.apple.product-type.application";
@@ -351,6 +359,10 @@
 			);
 			mainGroup = DA84255A305AC88300AF8284;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				F10000030000000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */,
+				F10000040000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = DA842564305AC88300AF8284 /* Products */;
 			projectDirPath = "";
@@ -960,6 +972,38 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		F10000030000000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/HaishinKit/HaishinKit.swift";
+			requirement = {
+				kind = exactVersion;
+				version = 2.2.5;
+			};
+		};
+		F10000040000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = exactVersion;
+				version = 0.9.20;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		F10000020000000000000001 /* SRTHaishinKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10000030000000000000001 /* XCRemoteSwiftPackageReference "HaishinKit" */;
+			productName = SRTHaishinKit;
+		};
+		F10000050000000000000001 /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = F10000040000000000000001 /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = DA84255B305AC88300AF8284 /* Project object */;
 	validationLevel = 1;

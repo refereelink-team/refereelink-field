@@ -7,26 +7,45 @@ import Observation
 final class LiveCaptureModel {
     private(set) var liveState: LiveCaptureState
     private(set) var cameraSession: AVCaptureSession?
+    private(set) var captureMode: CaptureSessionMode?
+    private(set) var archiveDescriptor: CaptureArchiveDescriptor?
+    private(set) var archiveExportURL: URL?
+    private(set) var transportStatus: TransportStatus
     let shouldAutoStart: Bool
 
     @ObservationIgnored private let dockKitSource: any DockKitSource
     @ObservationIgnored private let cameraSource: any CameraCaptureSource
     @ObservationIgnored private let cameraMotionSource: any CameraMotionSource
     @ObservationIgnored private let coordinator: SyncCoordinator
+    @ObservationIgnored private let archiveRecorder: CaptureArchiveRecorder
+    @ObservationIgnored private let archiveExporter: CaptureArchiveExporter
+    @ObservationIgnored private let fieldTransport: any FieldTransport
+    @ObservationIgnored private var realtimeVideoTransport: (any RealtimeVideoTransport)?
     @ObservationIgnored private var stateObservationTask: Task<Void, Never>?
     @ObservationIgnored private var dockObservationTask: Task<Void, Never>?
     @ObservationIgnored private var videoObservationTask: Task<Void, Never>?
     @ObservationIgnored private var cameraMotionObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var frameSampleObservationTask: Task<Void, Never>?
+    @ObservationIgnored private var transportObservationTask: Task<Void, Never>?
     @ObservationIgnored private var isRunning = false
     @ObservationIgnored private var cameraState: CameraCaptureState
     @ObservationIgnored private var currentError: String?
     @ObservationIgnored private var lastPublishedAt = Date.distantPast
+    @ObservationIgnored private var captureSessionId: UUID?
+    @ObservationIgnored private var captureClockAnchor: CaptureClockAnchor?
+    @ObservationIgnored private var activeStreamEpoch = 0
+    @ObservationIgnored private var firstVideoTimeUs: Int64?
+    @ObservationIgnored private var latestMotionForRecording: CameraMotionSnapshot = .waiting
+    @ObservationIgnored private var latestGimbalForRecording: GimbalSnapshot = .waiting
 
     init(
         dockKitSource: (any DockKitSource)? = nil,
         cameraSource: (any CameraCaptureSource)? = nil,
         cameraMotionSource: (any CameraMotionSource)? = nil,
         coordinator: SyncCoordinator = SyncCoordinator(),
+        archiveRecorder: CaptureArchiveRecorder = CaptureArchiveRecorder(),
+        archiveExporter: CaptureArchiveExporter = CaptureArchiveExporter(),
+        fieldTransport: (any FieldTransport)? = nil,
         initialState: LiveCaptureState = .initial,
         autoStart: Bool = true
     ) {
@@ -34,11 +53,26 @@ final class LiveCaptureModel {
         self.cameraSource = cameraSource ?? CaptureSourceFactory.makeCameraSource()
         self.cameraMotionSource = cameraMotionSource ?? CaptureSourceFactory.makeCameraMotionSource()
         self.coordinator = coordinator
+        self.archiveRecorder = archiveRecorder
+        self.archiveExporter = archiveExporter
+        self.fieldTransport = fieldTransport ?? URLSessionFieldTransport()
+        self.realtimeVideoTransport = nil
         self.liveState = initialState
         self.shouldAutoStart = autoStart
         self.cameraState = initialState.cameraState
         self.currentError = initialState.currentError
         self.cameraSession = self.cameraSource.session
+        self.captureMode = nil
+        self.archiveDescriptor = nil
+        self.archiveExportURL = nil
+        self.transportStatus = TransportStatus(
+            state: .disabled,
+            streamEpoch: 0,
+            sentFrameCount: 0,
+            sentMotionCount: 0,
+            droppedFrameCount: 0,
+            lastError: nil
+        )
     }
 
     static func preview(_ state: LiveCaptureState) -> LiveCaptureModel {
@@ -84,6 +118,22 @@ final class LiveCaptureModel {
             }
         }
 
+        let frameSampleStream = cameraSource.frameSamples
+        frameSampleObservationTask = Task { [weak self] in
+            for await sample in frameSampleStream {
+                guard !Task.isCancelled else { break }
+                self?.receive(sample: sample)
+            }
+        }
+
+        let transportStatusStream = fieldTransport.statuses
+        transportObservationTask = Task { [weak self] in
+            for await status in transportStatusStream {
+                guard !Task.isCancelled else { break }
+                self?.transportStatus = status
+            }
+        }
+
         await coordinator.reset()
         await coordinator.start()
 
@@ -114,16 +164,23 @@ final class LiveCaptureModel {
 
     func stop() async {
         guard isRunning else { return }
+        if captureMode != nil {
+            await stopCapture()
+        }
         isRunning = false
 
         stateObservationTask?.cancel()
         dockObservationTask?.cancel()
         videoObservationTask?.cancel()
         cameraMotionObservationTask?.cancel()
+        frameSampleObservationTask?.cancel()
+        transportObservationTask?.cancel()
         stateObservationTask = nil
         dockObservationTask = nil
         videoObservationTask = nil
         cameraMotionObservationTask = nil
+        frameSampleObservationTask = nil
+        transportObservationTask = nil
 
         cameraSession = nil
         cameraState = .idle
@@ -135,8 +192,90 @@ final class LiveCaptureModel {
         await coordinator.stop()
     }
 
+    func startCapture(mode: CaptureSessionMode) async {
+        guard captureMode == nil else { return }
+        if !isRunning {
+            await start()
+        }
+        guard isRunning else { return }
+        do {
+            captureSessionId = try archiveRecorder.start(mode: mode)
+            captureClockAnchor = CaptureClock.nowAnchor()
+            firstVideoTimeUs = nil
+            activeStreamEpoch = 0
+            captureMode = mode
+            archiveDescriptor = nil
+            archiveExportURL = nil
+
+            if mode == .realtime,
+               let configuration = FieldEndpointConfiguration.load() {
+                await fieldTransport.connect(configuration: configuration, sessionId: captureSessionId!)
+                if let allocation = await fieldTransport.allocateLive(sessionId: captureSessionId!) {
+                    let videoTransport = NativeSRTVideoTransport()
+                    do {
+                        try await videoTransport.connect(allocation: allocation)
+                        activeStreamEpoch = allocation.streamEpoch
+                        realtimeVideoTransport = videoTransport
+                    } catch {
+                        currentError = "实时视频连接失败：\(error.localizedDescription)"
+                        publishImmediately()
+                    }
+                }
+            }
+        } catch {
+            currentError = error.localizedDescription
+            publishImmediately()
+        }
+    }
+
+    func stopCapture() async {
+        guard captureMode != nil else { return }
+        let descriptor = await archiveRecorder.stop()
+        archiveDescriptor = descriptor
+        archiveExportURL = nil
+        captureSessionId = nil
+        captureClockAnchor = nil
+        firstVideoTimeUs = nil
+        activeStreamEpoch = 0
+        captureMode = nil
+        await fieldTransport.disconnect()
+        await realtimeVideoTransport?.disconnect()
+        realtimeVideoTransport = nil
+    }
+
+    func exportArchive() async {
+        guard let archiveDescriptor else { return }
+        do {
+            archiveExportURL = try await archiveExporter.export(archiveDescriptor)
+        } catch {
+            currentError = "采集包导出失败：\(error.localizedDescription)"
+            publishImmediately()
+        }
+    }
+
+    func configureEndpoint(_ configuration: FieldEndpointConfiguration) {
+        configuration.save()
+    }
+
     private func receive(gimbal snapshot: GimbalSnapshot) {
         guard isRunning else { return }
+        latestGimbalForRecording = snapshot
+        if let captureSessionId, let anchor = captureClockAnchor {
+            archiveRecorder.appendDock(
+                DockDiagnosticEvent(
+                    sessionId: captureSessionId,
+                    tUs: Int64(Date().timeIntervalSince1970 * 1_000_000) - anchor.wallClockUnixUs,
+                    identifier: snapshot.identifier,
+                    accessoryName: snapshot.accessoryName,
+                    hardwareModel: snapshot.hardwareModel,
+                    firmwareVersion: snapshot.firmwareVersion,
+                    connectionState: String(describing: snapshot.connectionState),
+                    motionStreamStatus: String(describing: snapshot.motionStreamStatus),
+                    motionSampleCount: snapshot.motionSampleCount,
+                    error: snapshot.errorMessage
+                )
+            )
+        }
         Task { [weak self] in
             guard let self, self.isRunning else { return }
             await self.coordinator.submit(gimbal: snapshot)
@@ -153,10 +292,101 @@ final class LiveCaptureModel {
 
     private func receive(cameraMotion snapshot: CameraMotionSnapshot) {
         guard isRunning else { return }
+        latestMotionForRecording = snapshot
+        if let captureSessionId, let anchor = captureClockAnchor, snapshot.hasSample {
+            archiveRecorder.appendMotion(makeMotionSample(snapshot, sessionId: captureSessionId, anchor: anchor))
+        }
         Task { [weak self] in
             guard let self, self.isRunning else { return }
             await self.coordinator.submit(cameraMotion: snapshot)
         }
+    }
+
+    private func receive(sample: CameraFrameSample) {
+        guard isRunning, let captureSessionId, let anchor = captureClockAnchor else { return }
+        let tick = sample.tick
+        if firstVideoTimeUs == nil {
+            firstVideoTimeUs = tick.captureTimeUs
+        }
+        let sessionTimeUs = tick.captureTimeUs.map { $0 - (firstVideoTimeUs ?? $0) }
+            ?? Int64(tick.receivedAt.timeIntervalSince1970 * 1_000_000) - anchor.wallClockUnixUs
+        let motionAgeUs: Int64?
+        let motionSampleId: Int?
+        let missingReason: String?
+        if latestMotionForRecording.hasSample,
+           let timestamp = latestMotionForRecording.timestamp {
+            let age = tick.receivedAt.timeIntervalSince(timestamp)
+            if age >= 0, age <= 0.05 {
+                motionAgeUs = Int64(age * 1_000_000)
+                motionSampleId = latestMotionForRecording.sampleCount
+                missingReason = nil
+            } else {
+                motionAgeUs = nil
+                motionSampleId = nil
+                missingReason = age < 0 ? "future_motion_sample" : "motion_sample_older_than_50ms"
+            }
+        } else {
+            motionAgeUs = nil
+            motionSampleId = nil
+            missingReason = "no_motion_sample"
+        }
+        let metadata = CapturedFrameMetadata(
+            sessionId: captureSessionId,
+            streamEpoch: activeStreamEpoch,
+            frameId: tick.sequence,
+            tUs: sessionTimeUs,
+            captureUnixUs: Int64(tick.receivedAt.timeIntervalSince1970 * 1_000_000),
+            presentationTimestampValue: tick.presentationTimestampValue,
+            presentationTimestampScale: tick.presentationTimestampScale,
+            width: tick.frameWidth,
+            height: tick.frameHeight,
+            droppedFrameCount: tick.droppedFrameCount,
+            cameraConfigurationId: "default-720p30",
+            cameraMotionSampleId: motionSampleId,
+            cameraMotionAgeUs: motionAgeUs,
+            poseMissingReason: missingReason
+        )
+        archiveRecorder.append(sample, metadata: metadata)
+        Task { [fieldTransport] in
+            await fieldTransport.send(frame: metadata)
+            await fieldTransport.send(sample: sample)
+        }
+        if captureMode == .realtime, let realtimeVideoTransport {
+            Task { [realtimeVideoTransport] in
+                await realtimeVideoTransport.append(sample.sampleBuffer)
+            }
+        }
+    }
+
+    private func makeMotionSample(
+        _ snapshot: CameraMotionSnapshot,
+        sessionId: UUID,
+        anchor: CaptureClockAnchor
+    ) -> CameraMotionSample {
+        CameraMotionSample(
+            sampleId: snapshot.sampleCount,
+            tUs: snapshot.sourceTimestamp.map { CaptureClock.sessionTimeUs(sourceTimestamp: $0, anchor: anchor) } ?? 0,
+            sourceTimestamp: snapshot.sourceTimestamp,
+            pitch: snapshot.pitch,
+            yaw: snapshot.yaw,
+            roll: snapshot.roll,
+            quaternionX: snapshot.quaternionX,
+            quaternionY: snapshot.quaternionY,
+            quaternionZ: snapshot.quaternionZ,
+            quaternionW: snapshot.quaternionW,
+            rotationRateX: snapshot.rotationRateX,
+            rotationRateY: snapshot.rotationRateY,
+            rotationRateZ: snapshot.rotationRateZ,
+            gravityX: snapshot.gravityX,
+            gravityY: snapshot.gravityY,
+            gravityZ: snapshot.gravityZ,
+            userAccelerationX: snapshot.userAccelerationX,
+            userAccelerationY: snapshot.userAccelerationY,
+            userAccelerationZ: snapshot.userAccelerationZ,
+            referenceFrame: snapshot.referenceFrame.rawValue,
+            status: String(describing: snapshot.status),
+            error: snapshot.errorMessage
+        )
     }
 
     private func applyCoordinatorState(_ state: LiveCaptureState) {

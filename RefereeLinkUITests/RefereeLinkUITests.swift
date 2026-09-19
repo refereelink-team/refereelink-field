@@ -34,6 +34,40 @@ final class RefereeLinkUITests: XCTestCase {
         XCTAssertTrue(metrics.exists)
         XCTAssertTrue(synchronization.exists)
         XCTAssertTrue(cameraPreview.exists)
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "capture.controls")
+                .firstMatch
+                .exists
+        )
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "capture.startOffline")
+                .firstMatch
+                .exists
+        )
+    }
+
+    @MainActor
+    func testMockCaptureControlsCanStartAndStopOfflineSession() throws {
+        let app = launchApp()
+        let start = app.descendants(matching: .any)
+            .matching(identifier: "capture.startOffline")
+            .firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 5))
+        start.tap()
+
+        let stop = app.descendants(matching: .any)
+            .matching(identifier: "capture.stop")
+            .firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 5))
+        stop.tap()
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "capture.export")
+                .firstMatch
+                .waitForExistence(timeout: 5)
+        )
     }
 
     @MainActor
@@ -149,6 +183,31 @@ final class RefereeLinkUITests: XCTestCase {
                 .matching(identifier: "camera.preview")
                 .firstMatch
                 .exists
+        )
+    }
+
+    @MainActor
+    func testPhysicalOfflineCaptureStartsAndStops() throws {
+        let app = launchApp(useMock: false)
+        let start = app.descendants(matching: .any)
+            .matching(identifier: "capture.startOffline")
+            .firstMatch
+        XCTAssertTrue(start.waitForExistence(timeout: 8))
+
+        start.tap()
+
+        let stop = app.descendants(matching: .any)
+            .matching(identifier: "capture.stop")
+            .firstMatch
+        XCTAssertTrue(stop.waitForExistence(timeout: 8))
+        sleep(3)
+        stop.tap()
+
+        XCTAssertTrue(
+            app.descendants(matching: .any)
+                .matching(identifier: "capture.export")
+                .firstMatch
+                .waitForExistence(timeout: 12)
         )
     }
 

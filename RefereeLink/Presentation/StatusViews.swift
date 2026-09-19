@@ -1,5 +1,202 @@
 import SwiftUI
 
+struct CaptureControlsView: View {
+    let mode: CaptureSessionMode?
+    let archive: CaptureArchiveDescriptor?
+    let archiveExportURL: URL?
+    let transportStatus: TransportStatus
+    let startOffline: () -> Void
+    let startRealtime: () -> Void
+    let stop: () -> Void
+    let exportArchive: () -> Void
+    let showSessions: () -> Void
+    let showBackendSettings: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label("采集会话", systemImage: mode == nil ? "record.circle" : "record.circle.fill")
+                .font(.headline)
+
+            if let mode {
+                HStack {
+                    Text(mode == .offline ? "离线录制中" : "实时录制中")
+                        .font(.subheadline.weight(.semibold))
+                    Spacer()
+                    Circle().fill(.red).frame(width: 10, height: 10).accessibilityHidden(true)
+                }
+                if mode == .realtime {
+                    LabeledContent("实时参数", value: transportTitle)
+                        .accessibilityIdentifier("capture.transportStatus")
+                }
+                Button("停止并保存会话", action: stop)
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+                    .accessibilityIdentifier("capture.stop")
+            } else {
+                Text("预览运行中，选择一种采集模式")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                HStack(spacing: 8) {
+                    Button("离线采集", action: startOffline)
+                        .buttonStyle(.borderedProminent)
+                        .accessibilityIdentifier("capture.startOffline")
+                    Button("实时采集", action: startRealtime)
+                        .buttonStyle(.bordered)
+                        .accessibilityIdentifier("capture.startRealtime")
+                }
+                Button("配置后端", action: showBackendSettings)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("capture.backendSettings")
+                Button("历史会话", action: showSessions)
+                    .buttonStyle(.bordered)
+                    .accessibilityIdentifier("capture.sessions")
+            }
+
+            if archive != nil {
+                HStack {
+                    Label("已保存", systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green)
+                    Spacer()
+                    Group {
+                        if let archiveExportURL {
+                            ShareLink(item: archiveExportURL) {
+                                Label("分享 ZIP", systemImage: "square.and.arrow.up")
+                            }
+                        } else {
+                            Button("生成 ZIP", action: exportArchive)
+                        }
+                    }
+                    .accessibilityIdentifier("capture.export")
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.black.opacity(0.62), in: RoundedRectangle(cornerRadius: 16))
+        .foregroundStyle(.white)
+        .accessibilityElement(children: .contain)
+        .accessibilityIdentifier("capture.controls")
+    }
+
+    private var transportTitle: String {
+        switch transportStatus.state {
+        case .disabled: return "未连接"
+        case .connecting: return "连接中"
+        case .connected: return "已连接"
+        case .reconnecting: return "重连中"
+        case .failed: return "连接错误"
+        }
+    }
+}
+
+struct CaptureSessionsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var archives: [CaptureArchiveDescriptor] = []
+    @State private var exportedURLs: [UUID: URL] = [:]
+    private let store = CaptureArchiveStore()
+    private let exporter = CaptureArchiveExporter()
+
+    var body: some View {
+        NavigationStack {
+            List {
+                if archives.isEmpty {
+                    ContentUnavailableView(
+                        "暂无采集会话",
+                        systemImage: "archivebox",
+                        description: Text("停止一次离线或实时采集后，会话会出现在这里。")
+                    )
+                } else {
+                    ForEach(archives) { archive in
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(archive.createdAt, format: .dateTime.year().month().day().hour().minute())
+                                .font(.headline)
+                            LabeledContent("模式", value: archive.lifecycle == .interrupted ? "已中断" : "已保存")
+                            LabeledContent("大小", value: ByteCountFormatter.string(fromByteCount: archive.sizeBytes, countStyle: .file))
+                            HStack {
+                                if let exportedURL = exportedURLs[archive.id] {
+                                    ShareLink(item: exportedURL) {
+                                        Label("分享 ZIP", systemImage: "square.and.arrow.up")
+                                    }
+                                } else {
+                                    Button("生成 ZIP") {
+                                        Task {
+                                            if let url = try? await exporter.export(archive) {
+                                                exportedURLs[archive.id] = url
+                                            }
+                                        }
+                                    }
+                                }
+                                Spacer()
+                                Button("删除", role: .destructive) {
+                                    try? FileManager.default.removeItem(at: archive.url)
+                                    archives = store.list()
+                                }
+                            }
+                        }
+                        .accessibilityElement(children: .contain)
+                        .accessibilityIdentifier("capture.session.\(archive.id.uuidString)")
+                    }
+                }
+            }
+            .navigationTitle("历史会话")
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完成") { dismiss() }
+                }
+            }
+            .task { archives = store.list() }
+        }
+    }
+}
+
+struct BackendSettingsView: View {
+    @Environment(\.dismiss) private var dismiss
+    @State private var baseURL: String
+    @State private var token: String
+    @State private var deviceName: String
+    let onSave: (FieldEndpointConfiguration) -> Void
+
+    init(onSave: @escaping (FieldEndpointConfiguration) -> Void) {
+        let configuration = FieldEndpointConfiguration.load() ?? .empty
+        _baseURL = State(initialValue: configuration.baseURLString)
+        _token = State(initialValue: configuration.bearerToken)
+        _deviceName = State(initialValue: configuration.deviceName)
+        self.onSave = onSave
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Tailnet 后端") {
+                    TextField("HTTPS 地址", text: $baseURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                    SecureField("设备 Token", text: $token)
+                    TextField("设备名称", text: $deviceName)
+                }
+                Section {
+                    Text("第一版只连接同一 Tailnet 内的后端。实时视频使用 SRT，参数使用 WSS。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("后端配置")
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("取消") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") {
+                        onSave(FieldEndpointConfiguration(baseURLString: baseURL, bearerToken: token, deviceName: deviceName))
+                        dismiss()
+                    }
+                    .disabled(URL(string: baseURL) == nil)
+                }
+            }
+        }
+    }
+}
+
 struct ConnectionStatusView: View {
     let snapshot: GimbalSnapshot
 

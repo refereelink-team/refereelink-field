@@ -2,6 +2,8 @@ import SwiftUI
 
 struct ContentView: View {
     let model: LiveCaptureModel
+    @State private var isShowingBackendSettings = false
+    @State private var isShowingCaptureSessions = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -20,6 +22,18 @@ struct ContentView: View {
 
                 ScrollView {
                     VStack(spacing: 12) {
+                        CaptureControlsView(
+                            mode: model.captureMode,
+                            archive: model.archiveDescriptor,
+                            archiveExportURL: model.archiveExportURL,
+                            transportStatus: model.transportStatus,
+                            startOffline: { startCapture(.offline) },
+                            startRealtime: { startCapture(.realtime) },
+                            stop: stopCapture,
+                            exportArchive: { exportArchive() },
+                            showSessions: { isShowingCaptureSessions = true },
+                            showBackendSettings: { isShowingBackendSettings = true }
+                        )
                         ConnectionStatusView(snapshot: model.liveState.gimbal)
                         CameraMotionMetricsView(snapshot: model.liveState.latestCameraMotion ?? .waiting)
                         SynchronizationStatusView(state: model.liveState)
@@ -48,6 +62,27 @@ struct ContentView: View {
                 await model.stop()
             }
         }
+        .sheet(isPresented: $isShowingBackendSettings) {
+            BackendSettingsView { configuration in
+                model.configureEndpoint(configuration)
+            }
+            .presentationDetents([.medium])
+        }
+        .sheet(isPresented: $isShowingCaptureSessions) {
+            CaptureSessionsView()
+        }
+    }
+
+    private func startCapture(_ mode: CaptureSessionMode) {
+        Task { await model.startCapture(mode: mode) }
+    }
+
+    private func stopCapture() {
+        Task { await model.stopCapture() }
+    }
+
+    private func exportArchive() {
+        Task { await model.exportArchive() }
     }
 }
 

@@ -89,6 +89,64 @@ nonisolated struct CameraMotionSnapshot: Equatable, Sendable {
     let status: CameraMotionStatus
     let referenceFrame: CameraMotionReferenceFrame
     let errorMessage: String?
+    let quaternionX: Double?
+    let quaternionY: Double?
+    let quaternionZ: Double?
+    let quaternionW: Double?
+    let gravityX: Double?
+    let gravityY: Double?
+    let gravityZ: Double?
+    let userAccelerationX: Double?
+    let userAccelerationY: Double?
+    let userAccelerationZ: Double?
+
+    init(
+        pitch: Double?,
+        yaw: Double?,
+        roll: Double?,
+        rotationRateX: Double?,
+        rotationRateY: Double?,
+        rotationRateZ: Double?,
+        sourceTimestamp: TimeInterval?,
+        timestamp: Date?,
+        sampleCount: Int,
+        status: CameraMotionStatus,
+        referenceFrame: CameraMotionReferenceFrame,
+        errorMessage: String?,
+        quaternionX: Double? = nil,
+        quaternionY: Double? = nil,
+        quaternionZ: Double? = nil,
+        quaternionW: Double? = nil,
+        gravityX: Double? = nil,
+        gravityY: Double? = nil,
+        gravityZ: Double? = nil,
+        userAccelerationX: Double? = nil,
+        userAccelerationY: Double? = nil,
+        userAccelerationZ: Double? = nil
+    ) {
+        self.pitch = pitch
+        self.yaw = yaw
+        self.roll = roll
+        self.rotationRateX = rotationRateX
+        self.rotationRateY = rotationRateY
+        self.rotationRateZ = rotationRateZ
+        self.sourceTimestamp = sourceTimestamp
+        self.timestamp = timestamp
+        self.sampleCount = sampleCount
+        self.status = status
+        self.referenceFrame = referenceFrame
+        self.errorMessage = errorMessage
+        self.quaternionX = quaternionX
+        self.quaternionY = quaternionY
+        self.quaternionZ = quaternionZ
+        self.quaternionW = quaternionW
+        self.gravityX = gravityX
+        self.gravityY = gravityY
+        self.gravityZ = gravityZ
+        self.userAccelerationX = userAccelerationX
+        self.userAccelerationY = userAccelerationY
+        self.userAccelerationZ = userAccelerationZ
+    }
 
     static let waiting = CameraMotionSnapshot(
         pitch: nil,
@@ -102,7 +160,17 @@ nonisolated struct CameraMotionSnapshot: Equatable, Sendable {
         sampleCount: 0,
         status: .waitingForFirstSample,
         referenceFrame: .xArbitraryZVertical,
-        errorMessage: nil
+        errorMessage: nil,
+        quaternionX: nil,
+        quaternionY: nil,
+        quaternionZ: nil,
+        quaternionW: nil,
+        gravityX: nil,
+        gravityY: nil,
+        gravityZ: nil,
+        userAccelerationX: nil,
+        userAccelerationY: nil,
+        userAccelerationZ: nil
     )
 
     static let unavailable = CameraMotionSnapshot(
@@ -117,7 +185,17 @@ nonisolated struct CameraMotionSnapshot: Equatable, Sendable {
         sampleCount: 0,
         status: .unavailable,
         referenceFrame: .xArbitraryZVertical,
-        errorMessage: nil
+        errorMessage: nil,
+        quaternionX: nil,
+        quaternionY: nil,
+        quaternionZ: nil,
+        quaternionW: nil,
+        gravityX: nil,
+        gravityY: nil,
+        gravityZ: nil,
+        userAccelerationX: nil,
+        userAccelerationY: nil,
+        userAccelerationZ: nil
     )
 
     static func failed(_ message: String) -> CameraMotionSnapshot {
@@ -133,7 +211,17 @@ nonisolated struct CameraMotionSnapshot: Equatable, Sendable {
             sampleCount: 0,
             status: .failed(message),
             referenceFrame: .xArbitraryZVertical,
-            errorMessage: message
+            errorMessage: message,
+            quaternionX: nil,
+            quaternionY: nil,
+            quaternionZ: nil,
+            quaternionW: nil,
+            gravityX: nil,
+            gravityY: nil,
+            gravityZ: nil,
+            userAccelerationX: nil,
+            userAccelerationY: nil,
+            userAccelerationZ: nil
         )
     }
 
@@ -250,6 +338,31 @@ nonisolated struct VideoFrameTick: Equatable, Sendable {
     let frameWidth: Int
     let frameHeight: Int
     let droppedFrameCount: Int
+    let presentationTimestampValue: Int64?
+    let presentationTimestampScale: Int32?
+    let captureTimeUs: Int64?
+
+    init(
+        sequence: Int,
+        presentationTimestamp: TimeInterval?,
+        receivedAt: Date,
+        frameWidth: Int,
+        frameHeight: Int,
+        droppedFrameCount: Int,
+        presentationTimestampValue: Int64? = nil,
+        presentationTimestampScale: Int32? = nil,
+        captureTimeUs: Int64? = nil
+    ) {
+        self.sequence = sequence
+        self.presentationTimestamp = presentationTimestamp
+        self.receivedAt = receivedAt
+        self.frameWidth = frameWidth
+        self.frameHeight = frameHeight
+        self.droppedFrameCount = droppedFrameCount
+        self.presentationTimestampValue = presentationTimestampValue
+        self.presentationTimestampScale = presentationTimestampScale
+        self.captureTimeUs = captureTimeUs
+    }
 }
 
 nonisolated struct LiveCaptureState: Equatable, Sendable {
