@@ -1,10 +1,15 @@
 import AVFoundation
 import Foundation
 import Observation
+import os
 
 @MainActor
 @Observable
 final class LiveCaptureModel {
+    private let logger = Logger(
+        subsystem: "io.github.refereelink-team.RefereeLink",
+        category: "LiveCapture"
+    )
     private(set) var liveState: LiveCaptureState
     private(set) var cameraSession: AVCaptureSession?
     private(set) var captureMode: CaptureSessionMode?
@@ -12,6 +17,8 @@ final class LiveCaptureModel {
     private(set) var archiveExportURL: URL?
     private(set) var transportStatus: TransportStatus
     let shouldAutoStart: Bool
+    let shouldAutoStartRealtime: Bool
+    let shouldUseWSSOnlyForFieldTest: Bool
 
     @ObservationIgnored private let dockKitSource: any DockKitSource
     @ObservationIgnored private let cameraSource: any CameraCaptureSource
@@ -35,6 +42,7 @@ final class LiveCaptureModel {
     @ObservationIgnored private var captureClockAnchor: CaptureClockAnchor?
     @ObservationIgnored private var activeStreamEpoch = 0
     @ObservationIgnored private var firstVideoTimeUs: Int64?
+    @ObservationIgnored private var firstTransportPresentationTimestampValue: Int64?
     @ObservationIgnored private var latestMotionForRecording: CameraMotionSnapshot = .waiting
     @ObservationIgnored private var latestGimbalForRecording: GimbalSnapshot = .waiting
 
@@ -59,6 +67,8 @@ final class LiveCaptureModel {
         self.realtimeVideoTransport = nil
         self.liveState = initialState
         self.shouldAutoStart = autoStart
+        self.shouldAutoStartRealtime = ProcessInfo.processInfo.arguments.contains("--auto-start-realtime")
+        self.shouldUseWSSOnlyForFieldTest = ProcessInfo.processInfo.arguments.contains("--field-wss-only")
         self.cameraState = initialState.cameraState
         self.currentError = initialState.currentError
         self.cameraSession = self.cameraSource.session
@@ -202,6 +212,7 @@ final class LiveCaptureModel {
             captureSessionId = try archiveRecorder.start(mode: mode)
             captureClockAnchor = CaptureClock.nowAnchor()
             firstVideoTimeUs = nil
+            firstTransportPresentationTimestampValue = nil
             activeStreamEpoch = 0
             captureMode = mode
             archiveDescriptor = nil
@@ -210,13 +221,17 @@ final class LiveCaptureModel {
             if mode == .realtime,
                let configuration = FieldEndpointConfiguration.load() {
                 await fieldTransport.connect(configuration: configuration, sessionId: captureSessionId!)
-                if let allocation = await fieldTransport.allocateLive(sessionId: captureSessionId!) {
+                if !shouldUseWSSOnlyForFieldTest,
+                   let allocation = await fieldTransport.allocateLive(sessionId: captureSessionId!) {
                     let videoTransport = NativeSRTVideoTransport()
                     do {
                         try await videoTransport.connect(allocation: allocation)
+                        await fieldTransport.activateLiveEpoch(allocation.streamEpoch)
                         activeStreamEpoch = allocation.streamEpoch
+                        firstTransportPresentationTimestampValue = nil
                         realtimeVideoTransport = videoTransport
                     } catch {
+                        logger.error("realtime video transport failed: \(String(reflecting: error), privacy: .public)")
                         currentError = "实时视频连接失败：\(error.localizedDescription)"
                         publishImmediately()
                     }
@@ -236,6 +251,7 @@ final class LiveCaptureModel {
         captureSessionId = nil
         captureClockAnchor = nil
         firstVideoTimeUs = nil
+        firstTransportPresentationTimestampValue = nil
         activeStreamEpoch = 0
         captureMode = nil
         await fieldTransport.disconnect()
@@ -261,20 +277,22 @@ final class LiveCaptureModel {
         guard isRunning else { return }
         latestGimbalForRecording = snapshot
         if let captureSessionId, let anchor = captureClockAnchor {
-            archiveRecorder.appendDock(
-                DockDiagnosticEvent(
-                    sessionId: captureSessionId,
-                    tUs: Int64(Date().timeIntervalSince1970 * 1_000_000) - anchor.wallClockUnixUs,
-                    identifier: snapshot.identifier,
-                    accessoryName: snapshot.accessoryName,
-                    hardwareModel: snapshot.hardwareModel,
-                    firmwareVersion: snapshot.firmwareVersion,
-                    connectionState: String(describing: snapshot.connectionState),
-                    motionStreamStatus: String(describing: snapshot.motionStreamStatus),
-                    motionSampleCount: snapshot.motionSampleCount,
-                    error: snapshot.errorMessage
-                )
+            let event = DockDiagnosticEvent(
+                sessionId: captureSessionId,
+                tUs: Int64(Date().timeIntervalSince1970 * 1_000_000) - anchor.wallClockUnixUs,
+                identifier: snapshot.identifier,
+                accessoryName: snapshot.accessoryName,
+                hardwareModel: snapshot.hardwareModel,
+                firmwareVersion: snapshot.firmwareVersion,
+                connectionState: String(describing: snapshot.connectionState),
+                motionStreamStatus: String(describing: snapshot.motionStreamStatus),
+                motionSampleCount: snapshot.motionSampleCount,
+                error: snapshot.errorMessage
             )
+            archiveRecorder.appendDock(event)
+            if captureMode == .realtime {
+                Task { [fieldTransport] in await fieldTransport.send(dock: event) }
+            }
         }
         Task { [weak self] in
             guard let self, self.isRunning else { return }
@@ -294,7 +312,11 @@ final class LiveCaptureModel {
         guard isRunning else { return }
         latestMotionForRecording = snapshot
         if let captureSessionId, let anchor = captureClockAnchor, snapshot.hasSample {
-            archiveRecorder.appendMotion(makeMotionSample(snapshot, sessionId: captureSessionId, anchor: anchor))
+            let motion = makeMotionSample(snapshot, sessionId: captureSessionId, anchor: anchor)
+            archiveRecorder.appendMotion(motion)
+            if captureMode == .realtime {
+                Task { [fieldTransport] in await fieldTransport.send(motion: motion) }
+            }
         }
         Task { [weak self] in
             guard let self, self.isRunning else { return }
@@ -310,6 +332,18 @@ final class LiveCaptureModel {
         }
         let sessionTimeUs = tick.captureTimeUs.map { $0 - (firstVideoTimeUs ?? $0) }
             ?? Int64(tick.receivedAt.timeIntervalSince1970 * 1_000_000) - anchor.wallClockUnixUs
+        let shouldTrackTransportPTS = captureMode == .offline || activeStreamEpoch > 0
+        if shouldTrackTransportPTS,
+           firstTransportPresentationTimestampValue == nil,
+           tick.presentationTimestampValue != nil,
+           tick.presentationTimestampScale != nil {
+            firstTransportPresentationTimestampValue = tick.presentationTimestampValue
+        }
+        let transportPts90k = CaptureClock.transportPTS90k(
+            presentationTimestampValue: tick.presentationTimestampValue,
+            presentationTimestampScale: tick.presentationTimestampScale,
+            originValue: shouldTrackTransportPTS ? firstTransportPresentationTimestampValue : nil
+        )
         let motionAgeUs: Int64?
         let motionSampleId: Int?
         let missingReason: String?
@@ -338,6 +372,7 @@ final class LiveCaptureModel {
             captureUnixUs: Int64(tick.receivedAt.timeIntervalSince1970 * 1_000_000),
             presentationTimestampValue: tick.presentationTimestampValue,
             presentationTimestampScale: tick.presentationTimestampScale,
+            transportPts90k: transportPts90k,
             width: tick.frameWidth,
             height: tick.frameHeight,
             droppedFrameCount: tick.droppedFrameCount,
