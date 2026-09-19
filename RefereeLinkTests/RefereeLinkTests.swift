@@ -1,4 +1,6 @@
 import Foundation
+import AVFoundation
+import CryptoKit
 import Testing
 @testable import RefereeLink
 
@@ -400,5 +402,202 @@ struct RefereeLinkTests {
         #expect(second?.sequence == 2)
         #expect(second?.frameWidth == 1280)
         #expect(second?.frameHeight == 720)
+    }
+
+    @Test
+    func captureClockMapsSourceUptimeToSessionAndWallClock() {
+        let anchor = CaptureClockAnchor(
+            wallClockUnixUs: 1_700_000_000_000_000,
+            systemUptimeUs: 42_000_000,
+            hostTimeUs: nil,
+            uncertaintyUs: 1_000
+        )
+
+        #expect(CaptureClock.sessionTimeUs(sourceTimestamp: 42.125, anchor: anchor) == 125_000)
+        #expect(CaptureClock.unixDate(from: 42.125, anchor: anchor).timeIntervalSince1970 == 1_700_000_000.125)
+    }
+
+    @Test
+    func captureContractRoundTripsManifestAndMotionSample() throws {
+        let sessionID = UUID(uuidString: "E2D2A4EA-C18A-42ED-B0AE-88F2FDCC7E50")!
+        let manifest = CaptureSessionManifest.initial(
+            sessionId: sessionID,
+            deviceId: UUID(uuidString: "15F6CE86-97AA-4E93-A4E7-D6D2A6EF8324")!,
+            mode: .offline,
+            startedAt: Date(timeIntervalSince1970: 1_700_000_000),
+            clockAnchors: []
+        )
+        let sample = CameraMotionSample(
+            sampleId: 7,
+            tUs: 123_000,
+            sourceTimestamp: 42.123,
+            pitch: 0.1,
+            yaw: -0.2,
+            roll: 0.3,
+            quaternionX: 0,
+            quaternionY: 0,
+            quaternionZ: 0,
+            quaternionW: 1,
+            rotationRateX: 0.01,
+            rotationRateY: -0.02,
+            rotationRateZ: 0.03,
+            gravityX: 0,
+            gravityY: 0,
+            gravityZ: -1,
+            userAccelerationX: 0,
+            userAccelerationY: 0,
+            userAccelerationZ: 0,
+            referenceFrame: "xArbitraryZVertical",
+            status: "streaming",
+            error: nil
+        )
+
+        let encoder = JSONEncoder.refereeLink
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let decodedManifest = try decoder.decode(
+            CaptureSessionManifest.self,
+            from: encoder.encode(manifest)
+        )
+        let decodedSample = try decoder.decode(
+            CameraMotionSample.self,
+            from: encoder.encode(sample)
+        )
+
+        #expect(decodedManifest == manifest)
+        #expect(decodedSample == sample)
+        #expect(decodedSample.referenceFrame == "xArbitraryZVertical")
+        #expect(decodedSample.rotationRateZ == 0.03)
+    }
+
+    @Test
+    func mockCameraProducesBoundedSampleBuffers() async throws {
+        let source = MockCameraCaptureService()
+        var iterator = source.frameSamples.makeAsyncIterator()
+
+        try await source.start()
+        let sample = await iterator.next()
+        await source.stop()
+
+        #expect(sample != nil)
+        #expect(sample?.tick.frameWidth == 1280)
+        #expect(sample?.tick.frameHeight == 720)
+        #expect(sample.map { CMSampleBufferDataIsReady($0.sampleBuffer) } == true)
+    }
+
+    @Test
+    func archiveExporterCreatesStandardZipWithoutMutatingSource() async throws {
+        let fileManager = FileManager.default
+        let root = fileManager.temporaryDirectory
+            .appendingPathComponent("RefereeLinkExport-\(UUID().uuidString).rlcapture", isDirectory: true)
+        try fileManager.createDirectory(at: root.appendingPathComponent("metadata"), withIntermediateDirectories: true)
+        try Data("{}\n".utf8).write(to: root.appendingPathComponent("manifest.json"))
+        try Data("frame\n".utf8).write(to: root.appendingPathComponent("metadata/frames.ndjson"))
+        defer { try? fileManager.removeItem(at: root) }
+
+        let descriptor = CaptureArchiveDescriptor(
+            id: UUID(),
+            url: root,
+            createdAt: Date(),
+            sizeBytes: 0,
+            lifecycle: .stopped
+        )
+        let zipURL = try await CaptureArchiveExporter().export(descriptor)
+        defer { try? fileManager.removeItem(at: zipURL) }
+
+        #expect(fileManager.fileExists(atPath: zipURL.path))
+        #expect((try? Data(contentsOf: zipURL).count) ?? 0 > 0)
+        #expect(fileManager.fileExists(atPath: root.appendingPathComponent("manifest.json").path))
+    }
+
+    @Test
+    func testFieldReceiverJoinsOnlyRecentMotionBeforeFrame() async throws {
+        let receiver = TestFieldReceiver()
+        let motion = CameraMotionSample(
+            sampleId: 4,
+            tUs: 100_000,
+            sourceTimestamp: 42.1,
+            pitch: 0.1,
+            yaw: 0.2,
+            roll: 0.3,
+            quaternionX: 0,
+            quaternionY: 0,
+            quaternionZ: 0,
+            quaternionW: 1,
+            rotationRateX: 0,
+            rotationRateY: 0,
+            rotationRateZ: 0,
+            gravityX: 0,
+            gravityY: 0,
+            gravityZ: -1,
+            userAccelerationX: 0,
+            userAccelerationY: 0,
+            userAccelerationZ: 0,
+            referenceFrame: "xArbitraryZVertical",
+            status: "streaming",
+            error: nil
+        )
+        try await receiver.ingest(motion: motion)
+
+        let frame = CapturedFrameMetadata(
+            sessionId: UUID(),
+            streamEpoch: 2,
+            frameId: 9,
+            tUs: 130_000,
+            captureUnixUs: 1_700_000_000_130_000,
+            presentationTimestampValue: 117_000,
+            presentationTimestampScale: 90_000,
+            width: 1280,
+            height: 720,
+            droppedFrameCount: 0,
+            cameraConfigurationId: "default-720p30",
+            cameraMotionSampleId: motion.sampleId,
+            cameraMotionAgeUs: 30_000,
+            poseMissingReason: nil
+        )
+        let joined = try await receiver.ingest(frame: frame)
+        #expect(joined.motion == motion)
+        #expect(joined.missingReason == nil)
+
+        let staleFrame = CapturedFrameMetadata(
+            sessionId: frame.sessionId,
+            streamEpoch: frame.streamEpoch,
+            frameId: frame.frameId + 1,
+            tUs: 200_001,
+            captureUnixUs: frame.captureUnixUs,
+            presentationTimestampValue: frame.presentationTimestampValue,
+            presentationTimestampScale: frame.presentationTimestampScale,
+            width: frame.width,
+            height: frame.height,
+            droppedFrameCount: frame.droppedFrameCount,
+            cameraConfigurationId: frame.cameraConfigurationId,
+            cameraMotionSampleId: nil,
+            cameraMotionAgeUs: nil,
+            poseMissingReason: "motion_sample_older_than_50ms"
+        )
+        let missing = try await receiver.ingest(frame: staleFrame)
+        #expect(missing.motion == nil)
+        #expect(missing.missingReason == "motion_sample_older_than_50ms")
+    }
+
+    @Test
+    func testFieldReceiverValidatesArtifactLengthAndHashAndSupportsFaultInjection() async throws {
+        let receiver = TestFieldReceiver()
+        let fileURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("RefereeLinkArtifact-\(UUID().uuidString).bin")
+        let data = Data("field artifact\n".utf8)
+        try data.write(to: fileURL)
+        defer { try? FileManager.default.removeItem(at: fileURL) }
+
+        let hash = SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+        try await receiver.validateArtifact(
+            fileURL: fileURL,
+            byteCount: Int64(data.count),
+            sha256: hash
+        )
+        await receiver.inject(.injected)
+        await #expect(throws: TestFieldReceiver.Failure.injected) {
+            try await receiver.validateArtifact(fileURL: fileURL, byteCount: Int64(data.count), sha256: hash)
+        }
     }
 }

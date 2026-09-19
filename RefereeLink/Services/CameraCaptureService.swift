@@ -22,17 +22,30 @@ enum CameraCaptureError: LocalizedError, Equatable, Sendable {
 protocol CameraCaptureSource: AnyObject, Sendable {
     var session: AVCaptureSession? { get }
     var frameTicks: AsyncStream<VideoFrameTick> { get }
+    var frameSamples: AsyncStream<CameraFrameSample> { get }
     func start() async throws
     func stop() async
 }
 
-final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, CameraCaptureSource, @unchecked Sendable {
+nonisolated final class CameraFrameSample: @unchecked Sendable {
+    let sampleBuffer: CMSampleBuffer
+    let tick: VideoFrameTick
+
+    init(sampleBuffer: CMSampleBuffer, tick: VideoFrameTick) {
+        self.sampleBuffer = sampleBuffer
+        self.tick = tick
+    }
+}
+
+nonisolated final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate, CameraCaptureSource, @unchecked Sendable {
     private let captureSession = AVCaptureSession()
     var session: AVCaptureSession? {
         captureSession
     }
     let frameTicks: AsyncStream<VideoFrameTick>
     private let continuation: AsyncStream<VideoFrameTick>.Continuation
+    let frameSamples: AsyncStream<CameraFrameSample>
+    private let sampleContinuation: AsyncStream<CameraFrameSample>.Continuation
     private let sessionQueue = DispatchQueue(label: "io.github.refereelink.camera-session")
     private let callbackQueue = DispatchQueue(label: "io.github.refereelink.camera-frames")
     private let logger = Logger(
@@ -50,6 +63,11 @@ final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSample
             continuation = $0
         }
         self.continuation = continuation!
+        var sampleContinuation: AsyncStream<CameraFrameSample>.Continuation?
+        frameSamples = AsyncStream(bufferingPolicy: .bufferingNewest(4)) {
+            sampleContinuation = $0
+        }
+        self.sampleContinuation = sampleContinuation!
         super.init()
     }
 
@@ -63,6 +81,7 @@ final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSample
             sessionQueue.async {
                 do {
                     try self.configureIfNeeded()
+                    self.videoOutput.setSampleBufferDelegate(self, queue: self.callbackQueue)
                     self.captureSession.startRunning()
                     continuation.resume()
                 } catch {
@@ -104,16 +123,19 @@ final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSample
             )
         }
 
-        continuation.yield(
-            VideoFrameTick(
+        let tick = VideoFrameTick(
                 sequence: sequence,
                 presentationTimestamp: presentationTimestamp.isNumeric ? presentationTimestamp.seconds : nil,
                 receivedAt: Date(),
                 frameWidth: Int(dimensions.width),
                 frameHeight: Int(dimensions.height),
-                droppedFrameCount: droppedFrameCount
+                droppedFrameCount: droppedFrameCount,
+                presentationTimestampValue: presentationTimestamp.isNumeric ? presentationTimestamp.value : nil,
+                presentationTimestampScale: presentationTimestamp.isNumeric ? presentationTimestamp.timescale : nil,
+                captureTimeUs: presentationTimestamp.isNumeric ? Int64(presentationTimestamp.seconds * 1_000_000) : nil
             )
-        )
+        continuation.yield(tick)
+        sampleContinuation.yield(CameraFrameSample(sampleBuffer: sampleBuffer, tick: tick))
     }
 
     func captureOutput(
@@ -152,7 +174,6 @@ final class NativeCameraCaptureService: NSObject, AVCaptureVideoDataOutputSample
             videoOutput.videoSettings = [
                 kCVPixelBufferPixelFormatTypeKey as String: Int(kCVPixelFormatType_420YpCbCr8BiPlanarVideoRange)
             ]
-            videoOutput.setSampleBufferDelegate(self, queue: callbackQueue)
             captureSession.addOutput(videoOutput)
             captureSession.commitConfiguration()
             isConfigured = true
@@ -172,7 +193,9 @@ nonisolated enum MockCameraScenario: Sendable {
 actor MockCameraCaptureService: CameraCaptureSource {
     nonisolated let session: AVCaptureSession? = nil
     nonisolated let frameTicks: AsyncStream<VideoFrameTick>
+    nonisolated let frameSamples: AsyncStream<CameraFrameSample>
     private let continuation: AsyncStream<VideoFrameTick>.Continuation
+    private let sampleContinuation: AsyncStream<CameraFrameSample>.Continuation
     private let scenario: MockCameraScenario
     private var simulationTask: Task<Void, Never>?
     private var hasStarted = false
@@ -184,6 +207,11 @@ actor MockCameraCaptureService: CameraCaptureSource {
             continuation = $0
         }
         self.continuation = continuation!
+        var sampleContinuation: AsyncStream<CameraFrameSample>.Continuation?
+        frameSamples = AsyncStream(bufferingPolicy: .bufferingNewest(4)) {
+            sampleContinuation = $0
+        }
+        self.sampleContinuation = sampleContinuation!
     }
 
     func start() async throws {
@@ -195,8 +223,7 @@ actor MockCameraCaptureService: CameraCaptureSource {
             hasStarted = false
             throw CameraCaptureError.permissionDenied
         case .stale:
-            continuation.yield(
-                VideoFrameTick(
+            let tick = VideoFrameTick(
                     sequence: 1,
                     presentationTimestamp: 0,
                     receivedAt: Date(),
@@ -204,7 +231,10 @@ actor MockCameraCaptureService: CameraCaptureSource {
                     frameHeight: 720,
                     droppedFrameCount: 0
                 )
-            )
+            continuation.yield(tick)
+            if let sample = Self.makeSampleBuffer(timestamp: 0) {
+                sampleContinuation.yield(CameraFrameSample(sampleBuffer: sample, tick: tick))
+            }
         case .live:
             simulationTask = Task { [weak self] in
                 var sequence = 0
@@ -222,7 +252,8 @@ actor MockCameraCaptureService: CameraCaptureSource {
                             frameWidth: 1280,
                             frameHeight: 720,
                             droppedFrameCount: 0
-                        )
+                        ),
+                        timestamp: timestamp
                     )
                 }
             }
@@ -235,8 +266,50 @@ actor MockCameraCaptureService: CameraCaptureSource {
         hasStarted = false
     }
 
-    private func publish(_ tick: VideoFrameTick) {
+    private func publish(_ tick: VideoFrameTick, timestamp: TimeInterval) {
         continuation.yield(tick)
+        if let sample = Self.makeSampleBuffer(timestamp: timestamp) {
+            sampleContinuation.yield(CameraFrameSample(sampleBuffer: sample, tick: tick))
+        }
+    }
+
+    nonisolated private static func makeSampleBuffer(timestamp: TimeInterval) -> CMSampleBuffer? {
+        var pixelBuffer: CVPixelBuffer?
+        let attributes: [CFString: Any] = [
+            kCVPixelBufferCGImageCompatibilityKey: true,
+            kCVPixelBufferCGBitmapContextCompatibilityKey: true
+        ]
+        guard CVPixelBufferCreate(
+            kCFAllocatorDefault,
+            1280,
+            720,
+            kCVPixelFormatType_32BGRA,
+            attributes as CFDictionary,
+            &pixelBuffer
+        ) == kCVReturnSuccess,
+        let pixelBuffer else { return nil }
+
+        var formatDescription: CMVideoFormatDescription?
+        guard CMVideoFormatDescriptionCreateForImageBuffer(
+            allocator: kCFAllocatorDefault,
+            imageBuffer: pixelBuffer,
+            formatDescriptionOut: &formatDescription
+        ) == noErr,
+        let formatDescription else { return nil }
+        var timing = CMSampleTimingInfo(
+            duration: CMTime(value: 1, timescale: 10),
+            presentationTimeStamp: CMTime(seconds: timestamp, preferredTimescale: 600),
+            decodeTimeStamp: .invalid
+        )
+        var sampleBuffer: CMSampleBuffer?
+        guard CMSampleBufferCreateReadyWithImageBuffer(
+            allocator: kCFAllocatorDefault,
+            imageBuffer: pixelBuffer,
+            formatDescription: formatDescription,
+            sampleTiming: &timing,
+            sampleBufferOut: &sampleBuffer
+        ) == noErr else { return nil }
+        return sampleBuffer
     }
 }
 
